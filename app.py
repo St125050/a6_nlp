@@ -1,5 +1,6 @@
 import os
-import streamlit as st
+import faiss
+import numpy as np
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import PyPDFLoader
@@ -162,23 +163,6 @@ def ask_chatbot(question, model="hf"):
     response = qa_chain.invoke({"query": question})
     return response["result"], response["source_documents"]
 
-# Streamlit App
-st.title("AI Chatbot")
-st.write("Ask questions about Aakash and get responses along with relevant source documents.")
-
-question = st.text_input("Enter your question:")
-model = st.selectbox("Select Model", ["Hugging Face - google/flan-t5-large", "Hugging Face - GPT-2", "Groq Cloud - Llama"])
-
-if st.button("Ask"):
-    if model == "Hugging Face - google/flan-t5-large":
-        model_key = "hf"
-    elif model == "Hugging Face - GPT-2":
-        model_key = "hf_alternate"
-    elif model == "Groq Cloud - Llama":
-        model_key = "groq"
-    
-    answer, source_documents = ask_chatbot(question, model=model_key)
-    st.write("Answer:", answer)
-    st.write("Source Documents:")
-    for doc in source_documents:
-        st.write(doc.page_content)
+# List of reference documents
+reference_documents = pdf_files
+print("Reference Documents:", reference_documents)
