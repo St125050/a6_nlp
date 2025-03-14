@@ -18,7 +18,6 @@ hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
 
-
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
@@ -42,17 +41,17 @@ text_chunks = []
 # Initialize embedding_model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
+# Load Personal Documents
+pdf_files = [
+    "aakashresume.pdf"
+]
+
 # Check if FAISS index exists and load it if available
 if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
     print("FAISS index loaded from disk.")
 else:
     print("FAISS index not found. Rebuilding...")
-
-    # Load Personal Documents
-    pdf_files = [
-        "aakashresume.pdf"
-    ]
 
     documents = []
     for pdf_file in pdf_files:
