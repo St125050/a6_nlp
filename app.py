@@ -36,6 +36,9 @@ hf_llm_alternate = HuggingFaceHub(
 # Define FAISS index file path
 INDEX_PATH = "faiss_index.bin"
 
+# Initialize text_chunks to an empty list
+text_chunks = []
+
 # Check if FAISS index exists and load it if available
 if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
