@@ -90,7 +90,7 @@ document_objects = []
 for i, doc in enumerate(text_chunks):
     doc_object = Document(page_content=doc.page_content, metadata=doc.metadata)
     document_objects.append(doc_object)
-    index_to_docstore_id[i] = str(i)
+    index_to_docstore_id[str(i)] = str(i)  # Ensure keys are strings
 
 docstore.mset([(str(i), doc) for i, doc in enumerate(document_objects)])
 
