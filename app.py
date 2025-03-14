@@ -10,9 +10,6 @@ from langchain.storage import InMemoryStore
 from langchain_core.documents import Document
 from langchain.llms import HuggingFaceHub
 
-# Placeholder for importing the Groq Llama model
-# from groq_llm import GroqLlama
-
 # Set the Hugging Face API Token as an environment variable
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
@@ -34,10 +31,6 @@ hf_llm_alternate = HuggingFaceHub(
     huggingfacehub_api_token=hf_token,
     model_kwargs={"temperature": 0.7, "max_length": 512}
 )
-
-# Initialize Groq Cloud Llama LLM
-# Replace 'your_groq_api_key' and 'your_groq_endpoint' with actual values
-# groq_llm = GroqLlama(api_key="your_groq_api_key", endpoint="your_groq_endpoint")
 
 # Define FAISS index file path
 INDEX_PATH = "faiss_index.bin"
@@ -134,14 +127,6 @@ qa_chain_hf_alternate = RetrievalQA.from_chain_type(
     retriever=retriever,
     return_source_documents=True
 )
-
-# Placeholder for setting up the Groq Cloud Llama chain
-# qa_chain_groq = RetrievalQA.from_chain_type(
-#     llm=groq_llm,
-#     chain_type="stuff",
-#     retriever=retriever,
-#     return_source_documents=True
-# )
 
 # Function to ask chatbot questions for different models
 def ask_chatbot(question, model="hf"):
