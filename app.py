@@ -17,7 +17,6 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
-
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
@@ -111,42 +110,61 @@ vector_store.docstore.search = docstore_get
 # Setup Retriever
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
-# Define the structured prompt
-prompt_template = """
-You are an AI assistant specializing in answering questions about Aakash.
-Your responses should be precise, informative, and based only on the provided documents.
-If the requested information is unavailable, politely state that you don’t have enough data.
+# Setup BM25 Keyword-Based Retriever
+bm25_retriever = BM25Retriever.from_documents(document_objects)
 
-Question: {question}
-Answer:
-"""
+# Hybrid Retrieval Function
+def hybrid_retrieve(question):
+    faiss_docs = retriever.get_relevant_documents(question)  # Dense retrieval
+    bm25_docs = bm25_retriever.get_relevant_documents(question)  # Sparse retrieval
+    
+    # Combine both results (prioritize unique documents)
+    combined_docs = {doc.page_content: doc for doc in faiss_docs + bm25_docs}.values()
+    
+    return list(combined_docs)
 
-# Set up LangChain RetrievalQA chain for each model
-qa_chain_hf = RetrievalQA.from_chain_type(
+# Define query expansion for improved search results
+def expand_query(question):
+    alternative_queries = [
+        f"What details are available about {question}?",
+        f"Can you summarize information related to {question}?",
+        f"Give me facts about {question}.",
+        f"Explain {question} in simple terms.",
+        f"What is known about {question} in the documents?"
+    ]
+    return [question] + alternative_queries
+
+# Set up LangChain RetrievalQA chain
+qa_chain = RetrievalQA.from_chain_type(
     llm=hf_llm,
     chain_type="stuff",
     retriever=retriever,
     return_source_documents=True
 )
 
-qa_chain_hf_alternate = RetrievalQA.from_chain_type(
-    llm=hf_llm_alternate,
-    chain_type="stuff",
-    retriever=retriever,
-    return_source_documents=True
-)
+# Load FLAN-T5 Model Locally
+llm_pipeline = pipeline("text2text-generation", model="google/flan-t5-large")
 
-# Function to ask chatbot questions for different models
-def ask_chatbot(question, model="hf"):
-    if model == "hf":
-        qa_chain = qa_chain_hf
-    elif model == "hf_alternate":
-        qa_chain = qa_chain_hf_alternate
-    else:
-        return "Invalid model specified.", []
+# Function to Generate Answer Locally
+def generate_answer_locally(question):
+    response = llm_pipeline(question, max_length=512, do_sample=True)
+    return response[0]['generated_text']
 
-    response = qa_chain.invoke({"query": question})
-    return response["result"], response["source_documents"]
+# Function to ask chatbot questions
+def ask_chatbot(question):
+    retrieved_docs = retriever.get_relevant_documents(question)
+    
+    if not retrieved_docs:
+        return "No relevant information found.", []
+
+    # Format Documents into Context
+    context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+
+    # Ask LLM
+    prompt = f"Answer based on these documents:\n{context}\n\nQuestion: {question}"
+    answer = generate_answer_locally(prompt)
+
+    return answer, retrieved_docs
 
 # List of reference documents
 reference_documents = pdf_files
