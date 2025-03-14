@@ -18,6 +18,7 @@ hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
 
+
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
@@ -49,8 +50,11 @@ else:
 
     documents = []
     for pdf_file in pdf_files:
-        loader = PyPDFLoader(pdf_file)
-        documents.extend(loader.load())
+        if os.path.exists(pdf_file):
+            loader = PyPDFLoader(pdf_file)
+            documents.extend(loader.load())
+        else:
+            raise FileNotFoundError(f"{pdf_file} not found. Ensure the file exists.")
 
     # Split documents into chunks
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
@@ -134,17 +138,9 @@ def ask_chatbot(question, model="hf"):
         qa_chain = qa_chain_hf
     elif model == "hf_alternate":
         qa_chain = qa_chain_hf_alternate
-    elif model == "groq":
-        # qa_chain = qa_chain_groq
-        pass
     else:
         return "Invalid model specified.", []
 
-    retrieved_docs = retriever.get_relevant_documents(question)
-    
-    if not retrieved_docs:
-        return "No relevant information found.", []
-    
     response = qa_chain.invoke({"query": question})
     return response["result"], response["source_documents"]
 
