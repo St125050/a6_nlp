@@ -1,7 +1,7 @@
-streamlit==1.15.0
-faiss-cpu==1.7.2
-numpy==1.21.4
-langchain==0.0.149
-sentence-transformers==2.2.0
-PyPDF2==1.26.0
-langchain-core==0.0.5
+streamlit
+faiss-cpu
+numpy
+langchain
+sentence-transformers
+PyPDF2
+langchain-core
