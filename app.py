@@ -17,6 +17,7 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
+
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
@@ -28,7 +29,7 @@ hf_llm = HuggingFaceHub(
 hf_llm_alternate = HuggingFaceHub(
     repo_id="gpt2",
     huggingfacehub_api_token=hf_token,
-    model_kwargs={"temperature": 0.7, "max_length": 512}
+    model_kwargs={"temperature": 0.7, "max_length": 512"}
 )
 
 # Define FAISS index file path
