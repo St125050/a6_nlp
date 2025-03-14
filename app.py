@@ -39,6 +39,9 @@ INDEX_PATH = "faiss_index.bin"
 # Initialize text_chunks to an empty list
 text_chunks = []
 
+# Initialize embedding_model
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
 # Check if FAISS index exists and load it if available
 if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
@@ -67,7 +70,6 @@ else:
     texts = [doc.page_content for doc in text_chunks]
 
     # Convert text to embeddings using SentenceTransformer
-    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = embedding_model.encode(texts, convert_to_tensor=False)
 
     # Convert embeddings to numpy array for FAISS
