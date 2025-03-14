@@ -29,7 +29,7 @@ hf_llm = HuggingFaceHub(
 hf_llm_alternate = HuggingFaceHub(
     repo_id="gpt2",
     huggingfacehub_api_token=hf_token,
-    model_kwargs={"temperature": 0.7, "max_length": 512"}
+    model_kwargs={"temperature": 0.7, "max_length": 512}
 )
 
 # Define FAISS index file path
