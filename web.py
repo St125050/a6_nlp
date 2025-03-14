@@ -2,57 +2,59 @@ import streamlit as st
 from app import ask_chatbot
 
 # Set up the page
-st.set_page_config(page_title="AI Document Assistant", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AI Document Assistant", page_icon="📄", layout="centered")
 
 # Custom Styling
 st.markdown(
     """
     <style>
-        body {background-color: #1E1E1E; color: #C0C0C0; font-family: 'Verdana', sans-serif;}
+        body {background-color: #282828; color: #E0E0E0; font-family: 'Helvetica', sans-serif;}
         .stTextInput>div>div>input {
-            border-radius: 20px;
-            padding: 15px;
-            font-size: 20px;
-            border: 1px solid #FF4500;
-            background-color: #333333;
-            color: #FFFFFF;
+            border-radius: 5px;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #00ADB5;
+            background-color: #393E46;
+            color: #E0E0E0;
         }
         .stButton>button {
-            border-radius: 20px;
-            padding: 10px 25px;
-            background: #FF4500;
+            border-radius: 5px;
+            padding: 10px 20px;
+            background-color: #00ADB5;
             color: #FFFFFF;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
-            transition: 0.3s;
+            transition: background-color 0.3s;
         }
         .stButton>button:hover {
-            background: #FF6347;
+            background-color: #007B7F;
         }
         .answer-box {
-            background: #444444;
-            padding: 25px;
-            border-radius: 15px;
-            font-size: 18px;
-            color: #FF4500;
-            font-weight: bold;
+            background: #393E46;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 16px;
+            color: #00ADB5;
+            margin-top: 20px;
         }
         .source-box {
-            background: #555555;
-            padding: 20px;
-            border-radius: 15px;
-            font-size: 16px;
-            color: #FFA07A;
+            background: #222831;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #EEEEEE;
+            margin-top: 10px;
         }
         .header {
             text-align: center;
-            color: #FF4500;
-            margin-top: 50px;
+            color: #00ADB5;
+            margin-top: 20px;
         }
         .description {
             text-align: center;
             font-size: 18px;
             margin-bottom: 30px;
+            color: #EEEEEE;
         }
     </style>
     """,
@@ -66,7 +68,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Input Section
-st.markdown("<h3 style='text-align: center;'>Type your question below:</h3>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center;'>Enter your question below:</h4>", unsafe_allow_html=True)
 question = st.text_input("", "")
 
 # Process the Question
@@ -75,12 +77,12 @@ if st.button("Get Answer"):
         answer, sources = ask_chatbot(question)
         
         # Display Answer
-        st.markdown("<h3 style='color: #FF4500;'>Answer:</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #00ADB5;'>Answer:</h3>", unsafe_allow_html=True)
         st.markdown(f"<div class='answer-box'>{answer}</div>", unsafe_allow_html=True)
         
         # Display Sources
         if sources:
-            st.markdown("<h3 style='color: #FF4500;'>Sources:</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #00ADB5;'>Sources:</h3>", unsafe_allow_html=True)
             for source in sources:
                 st.markdown(f"<div class='source-box'>{source.metadata.get('source', 'Unknown')}</div>", unsafe_allow_html=True)
         else:
