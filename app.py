@@ -30,10 +30,7 @@ FAISS_INDEX_PATH = "faiss_index.bin"
 
 # ✅ Ensure document processing is performed
 pdf_files = [
-    "EngTranscript.pdf",
-    "myCollected_Certificate.pdf",
-    "Ponkrit_CV(Eng).pdf",
-    "myAIT_Application.pdf"
+    "aakashresume.pdf"
 ]
 
 documents = []
