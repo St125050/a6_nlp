@@ -1,89 +1,86 @@
 import streamlit as st
-from app import ask_chatbot
+import json
+import os
+from simple_rag import initialize_rag_system
+from model_analysis import analyze_retriever_model, analyze_generator_model
 
-# Set up the page
-st.set_page_config(page_title="AI Document Assistant", page_icon="📄", layout="centered")
+# Initialize the RAG system
+st.write("Initializing RAG system...")
+rag_system = initialize_rag_system()
+st.write("RAG system initialized and ready to use")
 
-# Custom Styling
-st.markdown(
-    """
-    <style>
-        body {background-color: #282828; color: #E0E0E0; font-family: 'Helvetica', sans-serif;}
-        .stTextInput>div>div>input {
-            border-radius: 5px;
-            padding: 10px;
-            font-size: 16px;
-            border: 2px solid #00ADB5;
-            background-color: #393E46;
-            color: #E0E0E0;
-        }
-        .stButton>button {
-            border-radius: 5px;
-            padding: 10px 20px;
-            background-color: #00ADB5;
-            color: #FFFFFF;
-            font-size: 16px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        .stButton>button:hover {
-            background-color: #007B7F;
-        }
-        .answer-box {
-            background: #393E46;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 16px;
-            color: #00ADB5;
-            margin-top: 20px;
-        }
-        .source-box {
-            background: #222831;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 14px;
-            color: #EEEEEE;
-            margin-top: 10px;
-        }
-        .header {
-            text-align: center;
-            color: #00ADB5;
-            margin-top: 20px;
-        }
-        .description {
-            text-align: center;
-            font-size: 18px;
-            margin-bottom: 30px;
-            color: #EEEEEE;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Store conversation history for the demo
+qa_history = []
 
-# Title & Description
-st.markdown("""
-    <h1 class='header'>AI Document Assistant</h1>
-    <p class='description'>Ask a question about the documents and get an AI-powered response instantly!</p>
-""", unsafe_allow_html=True)
+# Run initial model analysis with a few test questions
+test_questions = [
+    "How old are you?",
+    "What is your highest level of education?",
+    "What are your core beliefs regarding technology?",
+    "What programming languages do you know?",
+    "Where did you work before Google?"
+]
 
-# Input Section
-st.markdown("<h4 style='text-align: center;'>Enter your question below:</h4>", unsafe_allow_html=True)
-question = st.text_input("", "")
+# Store analysis results
+retriever_analysis = analyze_retriever_model(rag_system, test_questions, verbose=False)
+generator_analysis = analyze_generator_model(rag_system, test_questions, verbose=False)
 
-# Process the Question
-if st.button("Get Answer"):
-    with st.spinner("Fetching the most relevant answer..."):
-        answer, sources = ask_chatbot(question)
+# Main application
+st.title("RAG Chatbot Demo")
+
+# Display model analysis
+st.subheader("Retriever Model Analysis")
+st.json(retriever_analysis)
+
+st.subheader("Generator Model Analysis")
+st.json(generator_analysis)
+
+# Chat interface
+st.subheader("Chat with the RAG System")
+
+user_message = st.text_input("Enter your message:")
+
+if st.button("Send"):
+    if user_message:
+        # Query the RAG system
+        result = rag_system.query(user_message)
         
-        # Display Answer
-        st.markdown("<h3 style='color: #00ADB5;'>Answer:</h3>", unsafe_allow_html=True)
-        st.markdown(f"<div class='answer-box'>{answer}</div>", unsafe_allow_html=True)
+        # Add to history
+        qa_pair = {
+            "question": result["question"],
+            "answer": result["answer"]
+        }
+        qa_history.append(qa_pair)
         
-        # Display Sources
-        if sources:
-            st.markdown("<h3 style='color: #00ADB5;'>Sources:</h3>", unsafe_allow_html=True)
-            for source in sources:
-                st.markdown(f"<div class='source-box'>{source.metadata.get('source', 'Unknown')}</div>", unsafe_allow_html=True)
-        else:
-            st.info("No sources found for this question.")
+        # Save the updated history to a JSON file
+        with open('qa_history.json', 'w') as f:
+            json.dump(qa_history, f, indent=2)
+        
+        # Display the result
+        st.write("Answer:", result["answer"])
+        st.write("Sources:", result["sources"])
+    else:
+        st.write("Please enter a message.")
+
+# Display question-answer history
+st.subheader("Question-Answer History")
+st.json(qa_history)
+
+# Analyze specific question
+st.subheader("Analyze a Specific Question")
+
+analyze_question = st.text_input("Enter a question to analyze:")
+
+if st.button("Analyze"):
+    if analyze_question:
+        # Analyze with retriever model
+        retriever_results = rag_system.vector_store.similarity_search(analyze_question)
+        
+        # Analyze with generator model (get full response)
+        generation_result = rag_system.query(analyze_question)
+        
+        # Display analysis results
+        st.write("Retriever Results:", retriever_results)
+        st.write("Generation Result:", generation_result)
+    else:
+        st.write("Please enter a question to analyze.")
