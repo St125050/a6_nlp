@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Simple Personal Information RAG Chatbot
+# 
+# This script implements a Retrieval-Augmented Generation (RAG) chatbot
+# that specializes in answering questions about personal information.
+# It uses a simplified approach without relying on LangChain.
+
 import os
 import torch
 import numpy as np
@@ -6,6 +15,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import faiss
 import pickle
 import json
+import PyPDF2
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,28 +28,27 @@ if not os.path.exists(vector_path):
     os.makedirs(vector_path)
     print('Vector store directory created')
 
-# 1. Document Loaders - Load personal information from various sources
+# 1. Document Loaders - Load personal information from PDF file
 def load_documents():
-    """Load personal information documents"""
+    """Load personal information documents from PDF"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sources = [
-        os.path.join(current_dir, 'personal_info.txt'),
-        os.path.join(current_dir, 'resume.txt'),
-        os.path.join(current_dir, 'blog_posts.txt')
-    ]
+    pdf_path = os.path.join(current_dir, 'aakashresume.pdf')
     
     all_documents = []
-    for source in sources:
-        try:
-            with open(source, 'r', encoding='utf-8') as file:
-                content = file.read()
-                all_documents.append({
-                    'content': content,
-                    'source': source
-                })
-            print(f"Loaded document from {source}")
-        except Exception as e:
-            print(f"Error loading {source}: {e}")
+    try:
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfFileReader(file)
+            content = ""
+            for page_num in range(reader.numPages):
+                page = reader.getPage(page_num)
+                content += page.extract_text() + "\n"
+            all_documents.append({
+                'content': content,
+                'source': pdf_path
+            })
+        print(f"Loaded document from {pdf_path}")
+    except Exception as e:
+        print(f"Error loading {pdf_path}: {e}")
     
     return all_documents
 
