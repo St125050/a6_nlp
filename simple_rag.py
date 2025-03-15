@@ -1,20 +1,13 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # Simple Personal Information RAG Chatbot
-# 
-# This script implements a Retrieval-Augmented Generation (RAG) chatbot
-# that specializes in answering questions about personal information.
-# It uses a simplified approach without relying on LangChain.
-
 import os
-import torch
+import faiss
 import numpy as np
 from transformers import AutoTokenizer, AutoModel, pipeline, AutoModelForSeq2SeqLM
-from sklearn.metrics.pairwise import cosine_similarity
-import faiss
-import pickle
-import json
+from sentence_transformers import SentenceTransformer
+from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain.storage import InMemoryStore
+from langchain.schema import Document
 
 # Set device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -27,98 +20,39 @@ if not os.path.exists(vector_path):
     os.makedirs(vector_path)
     print('Vector store directory created')
 
-# 1. Document Loaders - Load personal information from various sources
+# Set the path to the PDF file
+pdf_path = os.path.join(current_dir, 'aakashresume.pdf')
+
+# 1. Document Loaders - Load personal information from PDF
 def load_documents():
-    """Load personal information documents"""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    sources = [
-        os.path.join(current_dir, 'personal_info.txt'),
-        os.path.join(current_dir, 'resume.txt'),
-        os.path.join(current_dir, 'blog_posts.txt')
-    ]
+    """Load personal information documents from PDF"""
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"{pdf_path} not found. Ensure the file exists.")
     
-    all_documents = []
-    for source in sources:
-        try:
-            with open(source, 'r', encoding='utf-8') as file:
-                content = file.read()
-                all_documents.append({
-                    'content': content,
-                    'source': source
-                })
-            print(f"Loaded document from {source}")
-        except Exception as e:
-            print(f"Error loading {source}: {e}")
+    loader = PyPDFLoader(pdf_path)
+    documents = loader.load()
+    print(f"Loaded document from {pdf_path}")
     
-    return all_documents
+    return documents
 
 # 2. Document Transformers - Split documents into chunks
-def split_documents(documents, chunk_size=500, chunk_overlap=100):
+def split_documents(documents, chunk_size=1000, chunk_overlap=100):
     """Split documents into manageable chunks"""
-    doc_chunks = []
-    
-    for doc in documents:
-        content = doc['content']
-        source = doc['source']
-        
-        # Simple text splitting by paragraphs first, then by chunk size
-        paragraphs = content.split('\n\n')
-        
-        for para in paragraphs:
-            if not para.strip():
-                continue
-                
-            # If paragraph is smaller than chunk size, keep it as is
-            if len(para) <= chunk_size:
-                doc_chunks.append({
-                    'content': para,
-                    'source': source
-                })
-            else:
-                # Split large paragraphs into overlapping chunks
-                for i in range(0, len(para), chunk_size - chunk_overlap):
-                    chunk = para[i:i + chunk_size]
-                    if len(chunk) >= 50:  # Only keep chunks with substantial content
-                        doc_chunks.append({
-                            'content': chunk,
-                            'source': source
-                        })
+    text_splitter = CharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    doc_chunks = text_splitter.split_documents(documents)
     
     print(f"Created {len(doc_chunks)} document chunks")
     return doc_chunks
 
 # 3. Text Embedding Models - Create embeddings for document chunks
 class SentenceEmbedder:
-    def __init__(self, model_name='sentence-transformers/all-mpnet-base-v2'):
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name).to(device)
-        self.model.eval()
+    def __init__(self, model_name='all-MiniLM-L6-v2'):
+        self.model = SentenceTransformer(model_name)
         print(f"Initialized embedding model: {model_name}")
         
     def get_embeddings(self, texts):
         """Get embeddings for a list of texts"""
-        embeddings = []
-        
-        for text in texts:
-            # Tokenize and prepare input
-            inputs = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt").to(device)
-            
-            # Get embeddings
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                
-            # Use mean pooling to get sentence embedding
-            attention_mask = inputs['attention_mask']
-            token_embeddings = outputs.last_hidden_state
-            
-            # Mask padding tokens
-            input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-            sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-            sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-            embedding = (sum_embeddings / sum_mask).squeeze(0).cpu().numpy()
-            
-            embeddings.append(embedding)
-            
+        embeddings = self.model.encode(texts, convert_to_tensor=False)
         return np.array(embeddings)
 
 # 4. Vector Stores - Create or load vector store
@@ -133,7 +67,7 @@ class FAISSVectorStore:
         self.documents = documents
         
         # Extract text content for embedding
-        texts = [doc['content'] for doc in documents]
+        texts = [doc.page_content for doc in documents]
         
         # Get embeddings
         embeddings = self.embedding_model.get_embeddings(texts)
@@ -161,8 +95,8 @@ class FAISSVectorStore:
             if idx < len(self.documents):
                 doc = self.documents[idx]
                 results.append({
-                    'content': doc['content'],
-                    'source': doc['source'],
+                    'content': doc.page_content,
+                    'source': doc.metadata.get('source', 'unknown'),
                     'score': float(distances[0][i])
                 })
         
@@ -238,8 +172,8 @@ class RAGSystem:
         
         # Create prompt
         prompt = f"""
-        I am a helpful assistant that provides accurate information about Arya Shah based on the provided context.
-        I will answer questions about Arya's personal information, education, work experience, skills, beliefs, and other relevant details.
+        I am a helpful assistant that provides accurate information based on the provided context.
+        I will answer questions about personal information, education, work experience, skills, beliefs, and other relevant details.
         I will be friendly, conversational, and informative in my responses.
         If I don't know the answer based on the provided context, I will say so honestly rather than making up information.
         
