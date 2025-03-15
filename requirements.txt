@@ -1,7 +1,7 @@
 streamlit
-faiss-cpu
-numpy
-langchain
-langchain_community
-sentence-transformers
+torch
 transformers
+sentence-transformers
+faiss-cpu
+scikit-learn
+numpy
