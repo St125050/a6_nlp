@@ -1,8 +1,16 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # RAG Model Analysis
+# 
+# This script provides analysis of the retriever and generator models used in our RAG system,
+# focusing on issues related to unrelated information and performance evaluation.
+
 import os
 import json
 import numpy as np
 from sklearn.metrics import precision_recall_fscore_support
-from app.assignments.a6_talk_with_yourselves.simple_rag import initialize_rag_system, SentenceEmbedder
+from simple_rag import initialize_rag_system, SentenceEmbedder
 
 def analyze_retriever_model(rag_system, test_questions, verbose=True):
     """
