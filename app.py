@@ -113,6 +113,12 @@ vector_store.docstore.search = docstore_get
 # Setup Retriever
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
 
+# Log Document Objects to Verify Structure
+print("Document Objects:")
+for doc in document_objects:
+    print(f"Content: {doc.page_content[:100]}...")  # Print first 100 characters
+    print(f"Metadata: {doc.metadata}")
+
 # Setup BM25 Keyword-Based Retriever
 bm25_retriever = BM25Retriever.from_documents(document_objects)
 
