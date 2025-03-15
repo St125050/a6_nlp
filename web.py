@@ -1,6 +1,6 @@
 import streamlit as st
-import json
 from app import ask_chatbot
+import json
 
 # Set up the page
 st.set_page_config(page_title="AI Document Assistant", page_icon="📄", layout="centered")
