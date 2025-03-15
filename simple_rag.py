@@ -1,174 +1,333 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Simple Personal Information RAG Chatbot
+# 
+# This script implements a Retrieval-Augmented Generation (RAG) chatbot
+# that specializes in answering questions about personal information.
+# It uses a simplified approach without relying on LangChain.
+
 import os
-import faiss
+import torch
 import numpy as np
-from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from langchain.chains import RetrievalQA
-from sentence_transformers import SentenceTransformer
-from langchain.storage import InMemoryStore
-from langchain.schema import Document
-from langchain.llms import HuggingFaceHub
-from langchain.retrievers import BM25Retriever
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModel, pipeline, AutoModelForSeq2SeqLM
+from sklearn.metrics.pairwise import cosine_similarity
+import faiss
+import pickle
+import json
 
-# Set the Hugging Face API Token as an environment variable
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+# Set device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
 
-# Load Hugging Face API Token
-hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-if hf_token is None:
-    raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
+# Create vector store directory if it doesn't exist
+current_dir = os.path.dirname(os.path.abspath(__file__))
+vector_path = os.path.join(current_dir, 'vector-store')
+if not os.path.exists(vector_path):
+    os.makedirs(vector_path)
+    print('Vector store directory created')
 
-# Initialize Hugging Face LLM
-hf_llm = HuggingFaceHub(
-    repo_id="google/flan-t5-large",
-    huggingfacehub_api_token=hf_token,
-    model_kwargs={"temperature": 0.7, "max_length": 512}
-)
-
-# Define FAISS index file path
-INDEX_PATH = "faiss_index.bin"
-
-# Initialize text_chunks to an empty list
-text_chunks = []
-
-# Initialize embedding_model
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# Load Personal Documents
-pdf_files = [
-    "aakashresume.pdf"
-]
-
-# Check if FAISS index exists and load it if available
-if os.path.exists(INDEX_PATH):
-    index = faiss.read_index(INDEX_PATH)
-    print("FAISS index loaded from disk.")
-else:
-    print("FAISS index not found. Rebuilding...")
-
-    documents = []
-    for pdf_file in pdf_files:
-        if os.path.exists(pdf_file):
-            loader = PyPDFLoader(pdf_file)
-            documents.extend(loader.load())
-        else:
-            raise FileNotFoundError(f"{pdf_file} not found. Ensure the file exists.")
-
-    # Split documents into chunks
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    text_chunks = text_splitter.split_documents(documents)
-
-    # Extract text content from chunks
-    texts = [doc.page_content for doc in text_chunks]
-
-    # Convert text to embeddings using SentenceTransformer
-    embeddings = embedding_model.encode(texts, convert_to_tensor=False)
-
-    # Convert embeddings to numpy array for FAISS
-    embedding_matrix = np.array(embeddings).astype("float32")
-
-    # Initialize FAISS index
-    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
-    index.add(embedding_matrix)
-
-    # Save FAISS index to disk
-    faiss.write_index(index, INDEX_PATH)
-    print("FAISS index saved to disk.")
-
-# Create FAISS vector store
-docstore = InMemoryStore()
-index_to_docstore_id = {}
-
-document_objects = []
-for i, doc in enumerate(text_chunks):
-    doc_object = Document(page_content=doc.page_content, metadata=doc.metadata)
-    doc_object.metadata['id'] = str(i)  # Add an 'id' to the metadata
-    document_objects.append(doc_object)
-    index_to_docstore_id[str(i)] = str(i)  # Ensure keys are strings
-
-docstore.mset([(str(i), doc) for i, doc in enumerate(document_objects)])
-
-vector_store = FAISS(
-    embedding_function=embedding_model.encode,
-    index=index,
-    docstore=docstore,
-    index_to_docstore_id=index_to_docstore_id
-)
-
-# Override `docstore.search` with `mget()`
-def docstore_get(doc_id):
-    docs = docstore.mget([doc_id])
-    return docs[0] if docs else None
-
-vector_store.docstore.search = docstore_get
-
-# Setup Retriever
-retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
-
-# Log Document Objects to Verify Structure
-print("Document Objects:")
-for doc in document_objects:
-    print(f"Content: {doc.page_content[:100]}...")  # Print first 100 characters
-    print(f"Metadata: {doc.metadata}")
-
-# Setup BM25 Keyword-Based Retriever
-bm25_retriever = BM25Retriever.from_documents(document_objects)
-
-# Hybrid Retrieval Function
-def hybrid_retrieve(question):
-    faiss_docs = retriever.get_relevant_documents(question)  # Dense retrieval
-    bm25_docs = bm25_retriever.get_relevant_documents(question)  # Sparse retrieval
-    
-    # Combine both results (prioritize unique documents)
-    combined_docs = {doc.page_content: doc for doc in faiss_docs + bm25_docs}.values()
-    
-    return list(combined_docs)
-
-# Define query expansion for improved search results
-def expand_query(question):
-    alternative_queries = [
-        f"What details are available about {question}?",
-        f"Can you summarize information related to {question}?",
-        f"Give me facts about {question}.",
-        f"Explain {question} in simple terms.",
-        f"What is known about {question} in the documents?"
+# 1. Document Loaders - Load personal information from various sources
+def load_documents():
+    """Load personal information documents"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sources = [
+        os.path.join(current_dir, 'personal_info.txt'),
+        os.path.join(current_dir, 'resume.txt'),
+        os.path.join(current_dir, 'blog_posts.txt')
     ]
-    return [question] + alternative_queries
-
-# Set up LangChain RetrievalQA chain
-qa_chain = RetrievalQA.from_chain_type(
-    llm=hf_llm,
-    chain_type="stuff",
-    retriever=retriever,
-    return_source_documents=True
-)
-
-# Load FLAN-T5 Model Locally
-llm_pipeline = pipeline("text2text-generation", model="google/flan-t5-large")
-
-# Function to Generate Answer Locally
-def generate_answer_locally(question):
-    response = llm_pipeline(question, max_length=512, do_sample=True)
-    return response[0]['generated_text']
-
-# Function to ask chatbot questions
-def ask_chatbot(question):
-    retrieved_docs = retriever.get_relevant_documents(question)
     
-    if not retrieved_docs:
-        return "No relevant information found.", []
+    all_documents = []
+    for source in sources:
+        try:
+            with open(source, 'r', encoding='utf-8') as file:
+                content = file.read()
+                all_documents.append({
+                    'content': content,
+                    'source': source
+                })
+            print(f"Loaded document from {source}")
+        except Exception as e:
+            print(f"Error loading {source}: {e}")
+    
+    return all_documents
 
-    # Format Documents into Context
-    context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+# 2. Document Transformers - Split documents into chunks
+def split_documents(documents, chunk_size=500, chunk_overlap=100):
+    """Split documents into manageable chunks"""
+    doc_chunks = []
+    
+    for doc in documents:
+        content = doc['content']
+        source = doc['source']
+        
+        # Simple text splitting by paragraphs first, then by chunk size
+        paragraphs = content.split('\n\n')
+        
+        for para in paragraphs:
+            if not para.strip():
+                continue
+                
+            # If paragraph is smaller than chunk size, keep it as is
+            if len(para) <= chunk_size:
+                doc_chunks.append({
+                    'content': para,
+                    'source': source
+                })
+            else:
+                # Split large paragraphs into overlapping chunks
+                for i in range(0, len(para), chunk_size - chunk_overlap):
+                    chunk = para[i:i + chunk_size]
+                    if len(chunk) >= 50:  # Only keep chunks with substantial content
+                        doc_chunks.append({
+                            'content': chunk,
+                            'source': source
+                        })
+    
+    print(f"Created {len(doc_chunks)} document chunks")
+    return doc_chunks
 
-    # Ask LLM
-    prompt = f"Answer based on these documents:\n{context}\n\nQuestion: {question}"
-    answer = generate_answer_locally(prompt)
+# 3. Text Embedding Models - Create embeddings for document chunks
+class SentenceEmbedder:
+    def __init__(self, model_name='sentence-transformers/all-mpnet-base-v2'):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name).to(device)
+        self.model.eval()
+        print(f"Initialized embedding model: {model_name}")
+        
+    def get_embeddings(self, texts):
+        """Get embeddings for a list of texts"""
+        embeddings = []
+        
+        for text in texts:
+            # Tokenize and prepare input
+            inputs = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt").to(device)
+            
+            # Get embeddings
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                
+            # Use mean pooling to get sentence embedding
+            attention_mask = inputs['attention_mask']
+            token_embeddings = outputs.last_hidden_state
+            
+            # Mask padding tokens
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+            sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+            sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            embedding = (sum_embeddings / sum_mask).squeeze(0).cpu().numpy()
+            
+            embeddings.append(embedding)
+            
+        return np.array(embeddings)
 
-    return answer, retrieved_docs
+# 4. Vector Stores - Create or load vector store
+class FAISSVectorStore:
+    def __init__(self, embedding_model):
+        self.embedding_model = embedding_model
+        self.index = None
+        self.documents = []
+        
+    def add_documents(self, documents):
+        """Add documents to the vector store"""
+        self.documents = documents
+        
+        # Extract text content for embedding
+        texts = [doc['content'] for doc in documents]
+        
+        # Get embeddings
+        embeddings = self.embedding_model.get_embeddings(texts)
+        
+        # Create FAISS index
+        dimension = embeddings.shape[1]
+        self.index = faiss.IndexFlatL2(dimension)
+        
+        # Add embeddings to index
+        self.index.add(embeddings.astype(np.float32))
+        
+        print(f"Added {len(documents)} documents to vector store")
+        
+    def similarity_search(self, query, k=3):
+        """Search for similar documents"""
+        # Get query embedding
+        query_embedding = self.embedding_model.get_embeddings([query])[0].reshape(1, -1)
+        
+        # Search in FAISS index
+        distances, indices = self.index.search(query_embedding.astype(np.float32), k)
+        
+        # Get relevant documents
+        results = []
+        for i, idx in enumerate(indices[0]):
+            if idx < len(self.documents):
+                doc = self.documents[idx]
+                results.append({
+                    'content': doc['content'],
+                    'source': doc['source'],
+                    'score': float(distances[0][i])
+                })
+        
+        return results
+    
+    def save(self, path):
+        """Save vector store to disk"""
+        os.makedirs(path, exist_ok=True)
+        
+        # Save FAISS index
+        faiss.write_index(self.index, os.path.join(path, 'index.faiss'))
+        
+        # Save documents
+        with open(os.path.join(path, 'documents.pkl'), 'wb') as f:
+            pickle.dump(self.documents, f)
+            
+        print(f"Saved vector store to {path}")
+        
+    def load(self, path):
+        """Load vector store from disk"""
+        # Load FAISS index
+        self.index = faiss.read_index(os.path.join(path, 'index.faiss'))
+        
+        # Load documents
+        with open(os.path.join(path, 'documents.pkl'), 'rb') as f:
+            self.documents = pickle.load(f)
+            
+        print(f"Loaded vector store from {path} with {len(self.documents)} documents")
+        return self
 
-# List of reference documents
-reference_documents = pdf_files
-print("Reference Documents:", reference_documents)
+# 5. LLM Setup - Initialize language model for generation
+class TextGenerator:
+    def __init__(self, model_id='google/flan-t5-base'):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_id,
+            device_map='auto',
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+        )
+        
+        self.pipe = pipeline(
+            task="text2text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            max_new_tokens=512,
+            model_kwargs={
+                "temperature": 0.1,
+                "repetition_penalty": 1.2
+            }
+        )
+        
+        print(f"Initialized language model: {model_id}")
+        
+    def generate(self, prompt):
+        """Generate text based on prompt"""
+        result = self.pipe(prompt)
+        return result[0]['generated_text']
+
+# 6. RAG System - Combine retrieval and generation
+class RAGSystem:
+    def __init__(self, vector_store, generator):
+        self.vector_store = vector_store
+        self.generator = generator
+        self.chat_history = []
+        
+    def query(self, question):
+        """Process a query through the RAG system"""
+        # Retrieve relevant documents
+        results = self.vector_store.similarity_search(question)
+        
+        # Format context for the generator
+        context = "\n\n".join([f"From {r['source']}:\n{r['content']}" for r in results])
+        
+        # Create prompt
+        prompt = f"""
+        I am a helpful assistant that provides accurate information about Arya Shah based on the provided context.
+        I will answer questions about Arya's personal information, education, work experience, skills, beliefs, and other relevant details.
+        I will be friendly, conversational, and informative in my responses.
+        If I don't know the answer based on the provided context, I will say so honestly rather than making up information.
+        
+        Context:
+        {context}
+        
+        Question: {question}
+        
+        Answer:
+        """.strip()
+        
+        # Generate answer
+        answer = self.generator.generate(prompt)
+        
+        # Update chat history
+        self.chat_history.append({
+            "question": question,
+            "answer": answer
+        })
+        
+        return {
+            "question": question,
+            "answer": answer,
+            "sources": results
+        }
+    
+    def save_chat_history(self, filename='qa_history.json'):
+        """Save chat history to a JSON file"""
+        with open(filename, 'w') as f:
+            json.dump(self.chat_history, f, indent=2)
+        print(f"Saved chat history to {filename}")
+
+# Main function to initialize and return the RAG system
+def initialize_rag_system():
+    """Initialize the complete RAG system"""
+    print("Initializing RAG system...")
+    
+    # Set up paths
+    vector_store_path = os.path.join(vector_path, 'personal_info_db')
+    
+    # Initialize embedding model
+    embedder = SentenceEmbedder()
+    
+    # Initialize vector store
+    vector_store = FAISSVectorStore(embedder)
+    
+    # Check if vector store exists
+    if os.path.exists(os.path.join(vector_store_path, 'index.faiss')):
+        print("Loading existing vector store...")
+        vector_store.load(vector_store_path)
+    else:
+        print("Creating new vector store...")
+        # Load and process documents
+        documents = load_documents()
+        doc_chunks = split_documents(documents)
+        
+        # Add documents to vector store
+        vector_store.add_documents(doc_chunks)
+        
+        # Save vector store
+        vector_store.save(vector_store_path)
+    
+    # Initialize text generator
+    generator = TextGenerator()
+    
+    # Create RAG system
+    rag_system = RAGSystem(vector_store, generator)
+    
+    print("RAG system initialization complete")
+    return rag_system
+
+# If run directly, test the RAG system
+if __name__ == "__main__":
+    # Initialize the RAG system
+    rag = initialize_rag_system()
+    
+    # Test with a few questions
+    test_questions = [
+        "How old are you?",
+        "What is your highest level of education?",
+        "What are your core beliefs regarding technology?"
+    ]
+    
+    print("\nTesting RAG system with sample questions:")
+    for question in test_questions:
+        print(f"\nQuestion: {question}")
+        result = rag.query(question)
+        print(f"Answer: {result['answer']}")
+        print("Sources:")
+        for source in result['sources']:
+            print(f" - {source['source']}")
