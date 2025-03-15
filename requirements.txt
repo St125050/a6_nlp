@@ -2,5 +2,6 @@ streamlit
 faiss-cpu
 numpy
 langchain
+langchain_community
 sentence-transformers
 transformers
