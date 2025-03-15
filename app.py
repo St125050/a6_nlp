@@ -1,15 +1,16 @@
 import os
 import faiss
 import numpy as np
-from langchain.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader
-from langchain.chains import RetrievalQA
+from langchain_community.vectorstores import FAISS
+from langchain_community.text_splitter import CharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.chains import RetrievalQA
 from sentence_transformers import SentenceTransformer
-from langchain.storage import InMemoryStore
-from langchain_core.documents import Document
-from langchain.llms import HuggingFaceHub
-
+from langchain_community.storage import InMemoryStore
+from langchain_community.documents import Document
+from langchain_community.llms import HuggingFaceHub
+from langchain_community.retrievers import BM25Retriever  # Correct import for BM25Retriever
+from transformers import pipeline
 # Set the Hugging Face API Token as an environment variable
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
@@ -17,6 +18,9 @@ os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
+
+
+
 
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
