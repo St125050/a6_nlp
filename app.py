@@ -20,7 +20,6 @@ hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if hf_token is None:
     raise ValueError("HUGGINGFACEHUB_API_TOKEN is not set. Please set it in your environment variables.")
 
-
 # Initialize Hugging Face LLM
 hf_llm = HuggingFaceHub(
     repo_id="google/flan-t5-large",
@@ -92,6 +91,7 @@ index_to_docstore_id = {}
 document_objects = []
 for i, doc in enumerate(text_chunks):
     doc_object = Document(page_content=doc.page_content, metadata=doc.metadata)
+    doc_object.metadata['id'] = str(i)  # Add an 'id' to the metadata
     document_objects.append(doc_object)
     index_to_docstore_id[str(i)] = str(i)  # Ensure keys are strings
 
@@ -113,6 +113,12 @@ vector_store.docstore.search = docstore_get
 
 # Setup Retriever
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+
+# Log Document Objects to Verify Structure
+print("Document Objects:")
+for doc in document_objects:
+    print(f"Content: {doc.page_content[:100]}...")  # Print first 100 characters
+    print(f"Metadata: {doc.metadata}")
 
 # Setup BM25 Keyword-Based Retriever
 bm25_retriever = BM25Retriever.from_documents(document_objects)
