@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # RAG Model Analysis
-# 
-# This script provides analysis of the retriever and generator models used in our RAG system,
-# focusing on issues related to unrelated information and performance evaluation.
-
 import os
 import json
 import numpy as np
