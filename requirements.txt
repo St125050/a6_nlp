@@ -3,6 +3,4 @@ faiss-cpu
 numpy
 langchain
 sentence-transformers
-PyPDF2
 transformers
-langchain-community
