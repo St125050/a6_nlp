@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # Simple Personal Information RAG Chatbot
-# 
-# This script implements a Retrieval-Augmented Generation (RAG) chatbot
-# that specializes in answering questions about personal information.
-# It uses a simplified approach without relying on LangChain.
-
 import os
 import torch
 import numpy as np
