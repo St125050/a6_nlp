@@ -2,7 +2,7 @@ import os
 import faiss
 import numpy as np
 from langchain_community.vectorstores import FAISS
-from langchain_community.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.chains import RetrievalQA
 from sentence_transformers import SentenceTransformer
