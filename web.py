@@ -1,6 +1,5 @@
 import streamlit as st
 from app import ask_chatbot
-import json
 
 # Set up the page
 st.set_page_config(page_title="AI Document Assistant", page_icon="📄", layout="centered")
@@ -68,9 +67,6 @@ st.markdown("""
     <p class='description'>Ask a question about the documents and get an AI-powered response instantly!</p>
 """, unsafe_allow_html=True)
 
-# Initialize list to store question-answer pairs
-qa_pairs = []
-
 # Input Section
 st.markdown("<h4 style='text-align: center;'>Enter your question below:</h4>", unsafe_allow_html=True)
 question = st.text_input("", "")
@@ -80,9 +76,6 @@ if st.button("Get Answer"):
     with st.spinner("Fetching the most relevant answer..."):
         answer, sources = ask_chatbot(question)
         
-        # Store the question-answer pair
-        qa_pairs.append({"question": question, "answer": answer})
-
         # Display Answer
         st.markdown("<h3 style='color: #00ADB5;'>Answer:</h3>", unsafe_allow_html=True)
         st.markdown(f"<div class='answer-box'>{answer}</div>", unsafe_allow_html=True)
@@ -94,14 +87,3 @@ if st.button("Get Answer"):
                 st.markdown(f"<div class='source-box'>{source.metadata.get('source', 'Unknown')}</div>", unsafe_allow_html=True)
         else:
             st.info("No sources found for this question.")
-
-# Provide option to download the JSON file
-if qa_pairs:
-    st.markdown("<h4 style='text-align: center;'>Download your question-answer pairs:</h4>", unsafe_allow_html=True)
-    json_output = json.dumps(qa_pairs, indent=2)
-    st.download_button(
-        label="Download JSON",
-        data=json_output,
-        file_name="qa_pairs.json",
-        mime="application/json"
-    )
