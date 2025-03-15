@@ -1,16 +1,17 @@
 import os
 import faiss
 import numpy as np
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.chains import RetrievalQA
 from sentence_transformers import SentenceTransformer
 from langchain.storage import InMemoryStore
-from langchain.documents import Document
+from langchain.schema import Document
 from langchain.llms import HuggingFaceHub
 from langchain.retrievers import BM25Retriever
 from transformers import pipeline
+
 # Set the Hugging Face API Token as an environment variable
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
