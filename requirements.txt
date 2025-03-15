@@ -4,3 +4,4 @@ numpy
 langchain-community
 sentence-transformers
 PyPDF2
+transformers
