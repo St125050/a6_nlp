@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import json
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import PyPDFLoader
@@ -58,6 +59,10 @@ if vector_store:
         return_source_documents=True
     )
 
+# Initialize session state to store responses
+if "responses" not in st.session_state:
+    st.session_state.responses = []
+
 # Streamlit UI
 st.title("Chatbot About Aakash")
 st.write("Ask questions about Aakash based on their resume!")
@@ -72,8 +77,8 @@ if st.button("Ask"):
     elif not vector_store or not qa_chain:
         st.write("Cannot process questions due to missing PDF or initialization error.")
     else:
-        # Get response from the QA chain
         try:
+            # Get response from the QA chain
             response = qa_chain.invoke({"query": question})
             answer = response["result"]
             source_docs = response["source_documents"]
@@ -84,6 +89,31 @@ if st.button("Ask"):
             # Display source documents
             st.write("**Source Documents:**")
             for i, doc in enumerate(source_docs, 1):
-                st.write(f"**Document {i}:** {doc.page_content[:200]}...")  # Show first 200 chars
+                st.write(f"**Document {i}:** {doc.page_content[:200]}...")
+
+            # Store the question and answer in session state
+            st.session_state.responses.append({
+                "question": question,
+                "answer": answer
+            })
+
         except Exception as e:
             st.write(f"Error processing question: {str(e)}")
+
+# Display current responses
+if st.session_state.responses:
+    st.write("### Stored Responses")
+    st.json(st.session_state.responses)
+
+# End button to download JSON responses
+if st.button("End"):
+    if st.session_state.responses:
+        json_str = json.dumps(st.session_state.responses, indent=2)
+        st.download_button(
+            label="Download Responses as JSON",
+            data=json_str,
+            file_name="chatbot_responses.json",
+            mime="application/json"
+        )
+    else:
+        st.write("No responses to download yet.")
