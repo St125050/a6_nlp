@@ -1,10 +1,8 @@
 streamlit
-torch
-transformers
+langchain
+langchain-community
+pypdf
 sentence-transformers
 faiss-cpu
-scikit-learn
+huggingface_hub
 numpy
-PyPDF2
-langchain
-langchain_community
