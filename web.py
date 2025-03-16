@@ -4,9 +4,7 @@ from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import PyPDFLoader
 from langchain.chains import RetrievalQA
-from sentence_transformers import SentenceTransformer
-from langchain.storage import InMemoryStore
-from langchain_core.documents import Document
+from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import HuggingFaceHub
 
 # Set the Hugging Face API Token (should be set as an environment variable in Streamlit Cloud)
@@ -27,42 +25,30 @@ def load_vector_store():
         st.error("PDF file not found. Please upload 'aakashresume.pdf' to the repository.")
         return None
     
-    # Load the PDF
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
+    try:
+        # Load the PDF
+        loader = PyPDFLoader(pdf_path)
+        documents = loader.load()
 
-    # Split documents into chunks
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    text_chunks = text_splitter.split_documents(documents)
+        # Split documents into chunks
+        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        text_chunks = text_splitter.split_documents(documents)
 
-    # Create embeddings
-    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    embeddings = embedding_model.encode([doc.page_content for doc in text_chunks], convert_to_tensor=False)
+        # Create embeddings using LangChain's SentenceTransformerEmbeddings
+        embedding_model = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    # Create FAISS index
-    import faiss
-    import numpy as np
-    embedding_matrix = np.array(embeddings).astype("float32")
-    index = faiss.IndexFlatL2(embedding_matrix.shape[1])
-    index.add(embedding_matrix)
-
-    # Create vector store
-    docstore = InMemoryStore()
-    index_to_docstore_id = {i: str(i) for i in range(len(text_chunks))}
-    docstore.mset([(str(i), Document(page_content=doc.page_content, metadata=doc.metadata)) for i, doc in enumerate(text_chunks)])
-
-    vector_store = FAISS(
-        embedding_function=embedding_model.encode,
-        index=index,
-        docstore=docstore,
-        index_to_docstore_id=index_to_docstore_id
-    )
-    return vector_store
+        # Create FAISS vector store directly from documents and embeddings
+        vector_store = FAISS.from_documents(text_chunks, embedding_model)
+        return vector_store
+    except Exception as e:
+        st.error(f"Error loading vector store: {str(e)}")
+        return None
 
 # Initialize the vector store
 vector_store = load_vector_store()
 
 # Set up the QA chain
+qa_chain = None
 if vector_store:
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
     qa_chain = RetrievalQA.from_chain_type(
@@ -83,18 +69,21 @@ question = st.text_input("Enter your question:")
 if st.button("Ask"):
     if not question:
         st.write("Please enter a question.")
-    elif not vector_store:
-        st.write("Cannot process questions due to missing PDF.")
+    elif not vector_store or not qa_chain:
+        st.write("Cannot process questions due to missing PDF or initialization error.")
     else:
         # Get response from the QA chain
-        response = qa_chain.invoke({"query": question})
-        answer = response["result"]
-        source_docs = response["source_documents"]
+        try:
+            response = qa_chain.invoke({"query": question})
+            answer = response["result"]
+            source_docs = response["source_documents"]
 
-        # Display answer
-        st.write("**Answer:**", answer)
+            # Display answer
+            st.write("**Answer:**", answer)
 
-        # Display source documents
-        st.write("**Source Documents:**")
-        for i, doc in enumerate(source_docs, 1):
-            st.write(f"**Document {i}:** {doc.page_content[:200]}...")  # Show first 200 chars
+            # Display source documents
+            st.write("**Source Documents:**")
+            for i, doc in enumerate(source_docs, 1):
+                st.write(f"**Document {i}:** {doc.page_content[:200]}...")  # Show first 200 chars
+        except Exception as e:
+            st.write(f"Error processing question: {str(e)}")
