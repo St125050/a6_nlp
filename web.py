@@ -8,7 +8,7 @@ from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import HuggingFaceHub
 
 # Set the Hugging Face API Token (should be set as an environment variable in Streamlit Cloud)
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"  # Replace with your token
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"  # Replace with your token
 
 # Load the Hugging Face model
 llm = HuggingFaceHub(
